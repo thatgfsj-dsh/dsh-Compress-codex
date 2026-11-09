@@ -5,6 +5,10 @@
 > 用户会丢什么、以及组合起来有哪些 ptc 特有的风险**。
 > 证据标记：[证据] 本机实测/源码原文；[推断] 由证据推导；[未验证] 未跑过。
 >
+> **修订记录（2026-11-10，dsh 0.2.2-rc.1）**：上游把 ptc 的 `tool-presentation`
+> （`@deepseek-ai/dsh-agent-tool-presentation`，`config.mode: ptc`）换成了 `tool-executor-ptc`
+> （`@deepseek-ai/dsh-tool-executor-ptc`）。§0/§1 的差异项已按新行名标注，PTC 语义不变。
+>
 > **修订记录（2026-10-19）**：本文首次提交时 #53（`单一来源 + anchor 校验 + 漂移门禁`）正在评审，
 > 因此 §6/§7 已按 #53 落地后的生成器（358 行、`preset-anchors.json`、`--check`/`--selftest`）重写，
 > 避免"把已实现的东西写成待办"。§1–§5 的 ptc 事实未变。
@@ -13,8 +17,9 @@
 
 ## 0. 结论先行
 
-1. **ptc 相对 standard 只差三处**（其余 128/134 行逐字相同）：多一行 `tool-presentation`（`mode: ptc`）、
-   把 `workflow-ptc` 与 `tool-workflow` 改成 `disabled: true`、以及 `id/order`。**[证据]**
+1. **ptc 相对 standard 只差三处**（其余 roster 行逐字相同）：多一行 `tool-executor-ptc`
+   （`0.2.1-rc.2` 时是 `tool-presentation` + `mode: ptc`）、把 `workflow-ptc` 与 `tool-workflow`
+   改成 `disabled: true`、以及 `id/order`。**[证据]**
 2. **用户切到我们现在的 `codex`（standard 基座）只会丢一样东西：PTC 的工具呈现** —— 模型从
    "只看见 `run_code` + 生成的 SDK" 变回 "每个工具一个 schema"。这几乎肯定就是他选 ptc 的原因。**[证据+推断]**
    反向还有一处**行为改变**：`workflow-ptc`/`tool-workflow` 会**重新启用**（不是丢失，但同样改变工具目录与模型行为）。
@@ -38,7 +43,10 @@
 | 2 | `config.order` | `1` | `2` | UI 排序用（见 §5） |
 | 3 | `workflow-ptc`（在 `delegation` 组内） | 启用 | **`disabled: true`** | 关掉 JS workflow 编排 |
 | 4 | `tool-workflow`（同组） | 启用 | **`disabled: true`** | 关掉对应工具 |
-| 5 | `tool-presentation` | **不存在** | `@deepseek-ai/dsh-agent-tool-presentation`，`config.mode: ptc` | **PTC 呈现的开关** |
+| 5 | `tool-executor-ptc` | **不存在** | `@deepseek-ai/dsh-tool-executor-ptc`（`0.2.1-rc.2` 时是 `@deepseek-ai/dsh-agent-tool-presentation` + `config.mode: ptc`） | **PTC 呈现的开关** |
+
+> 行 5 随 `0.2.2-rc.1` 变化：新模块不再需要 `mode: ptc` 字段，行名从 `tool-presentation` 改为
+> `tool-executor-ptc`。其余 roster 与 §1 表一致。
 
 **其余全部逐字相同**，包括：`persona`（含 prefix 文案）、`agent-instructions`、`time-context`、
 `tool-bash`/`tool-pwsh` 的平台条件、`tool-fs`、`tool-fs-search`、`tool-jobs`、`tool-schedule`、
@@ -58,7 +66,8 @@ diff -u "$DSH_NODE/@deepseek-ai/dsh-web-app/presets/standard.patch.yml" \
 
 ## 2. PTC 到底是什么，用户会丢什么
 
-`@deepseek-ai/dsh-agent-tool-presentation` 的 README（原文）：
+`@deepseek-ai/dsh-agent-tool-presentation` 的 README（原文；`0.2.2-rc.1` 起该呈现由
+`@deepseek-ai/dsh-tool-executor-ptc` 提供，语义相同）：
 
 > `native` presents each visible tool schema as a function definition; `ptc` presents only the
 > `run_code` transport plus a generated SDK and the rule that only `run_code` may be called directly.
@@ -165,10 +174,10 @@ diff -u "$DSH_NODE/@deepseek-ai/dsh-web-app/presets/standard.patch.yml" \
 | 能力 | 现状（本机实测） |
 |---|---|
 | 单一来源 | 直接读权威源文件 `<dsh>/…/dsh-web-app/presets/<base>.patch.yml`（`--source` / `DSH_PRESET_DIR` / `DSH_BIN`），**不再**从 `--dump-config` 组合树切片；**已无 `--profile`** |
-| anchor 校验 | `scripts/preset-anchors.json` 记录源文件 SHA256（baseline `0.2.1-rc.2`，当前只登记了 `standard`）；默认校验，不匹配即中断，只有 `--update-anchor` 才重写 |
+| anchor 校验 | `scripts/preset-anchors.json` 记录源文件 SHA256（baseline `0.2.2-rc.1`，`standard` 与 `ptc` 均已登记）；默认校验，不匹配即中断，只有 `--update-anchor` 才重写 |
 | 形状断言 | 转换规则是"计数 + 精确匹配"：上游形状变化显式失败，而不是产出半改的 preset |
 | 退出码 | `0` 校验通过（并生成）/ `1` 漂移、篡改或形状变化 / `2` 拿不到 dsh 或源文件（**INCOMPLETE，不说 PASS**） |
-| 反向证明 | `--selftest`：8 项故障注入，本机实测 **8/8 PASS**（`tampered anchor fails`、`simulated upstream change fails`、`lost retarget row fails`、`missing anchor fails`、`missing source is INCOMPLETE, never PASS` …） |
+| 反向证明 | `--selftest`：故障注入（#53 时 8 项，后续 #60/#64 扩到 **27 项期望**，本机实测全过）（`tampered anchor fails`、`simulated upstream change fails`、`lost retarget row fails`、`missing anchor fails`、`missing source is INCOMPLETE, never PASS` …） |
 | CI | `ci / preset-drift`（非 required，需真实 dsh）+ `ci / compat-next` 的同款校验 |
 | 参数面 | `--base`/`--source`/`--out`/`--plugin`/`--anchors`/`--baseline` + `--check`/`--update-anchor`/`--selftest` |
 
@@ -227,17 +236,17 @@ diff -u /tmp/r-std.txt /tmp/r-ptc.txt
 
 # 2) 用生成器产出 ptc 基座副本。三点注意（§6.2）：
 #    ① 已无 --profile：新 CLI 直接读权威源文件（--source / DSH_PRESET_DIR / DSH_BIN）
-#    ② ptc 还没有 anchor ⇒ 首跑会以 exit 1 正确失败（原文见 §6.2）
-#    ③ 产物身份仍是 preset-codex / id: codex / order: 0，会与 standard 版产物撞名
-node scripts/sync-preset-codex.mjs --base ptc --check            # 预期 exit 1：no anchor recorded
+#    ② ptc anchor 已登记（0.2.2-rc.1），所以 --check 应 exit 0；若上游变动会 exit 1
+#    ③ 产物身份已参数化，不再与 standard 版撞名（必须显式传 --preset-id 等）
+node scripts/sync-preset-codex.mjs --base ptc --check            # 预期 exit 0（anchor 已登记）
 node scripts/sync-preset-codex.mjs --base ptc --update-anchor     # 看过 diff 后再记基线
 node scripts/sync-preset-codex.mjs --base ptc --out /tmp/preset-codex-ptc.yml
-node scripts/sync-preset-codex.mjs --selftest                     # CI 同款：8 项故障注入
-grep -n 'tool-presentation\|workflow-ptc\|tool-workflow\|compaction-codex' /tmp/preset-codex-ptc.yml
+node scripts/sync-preset-codex.mjs --selftest                     # CI 同款：反向证明（当前 27 项期望）
+grep -n 'tool-executor-ptc\|workflow-ptc\|tool-workflow\|compaction-codex' /tmp/preset-codex-ptc.yml
 
 # 3) 叠加后核对组成（隔离组是否已 retarget、ptc 的三处差异是否保留）
 dsh --profile web --patch /tmp/preset-codex-ptc.yml --dump-config > /tmp/with-codex-ptc.txt
-grep -n -A3 -E 'id: preset-codex-ptc|id: compaction-codex|id: tool-presentation' /tmp/with-codex-ptc.txt
+grep -n -A3 -E 'id: preset-codex-ptc|id: compaction-codex|id: tool-executor-ptc' /tmp/with-codex-ptc.txt
 
 # 4) 【关键】真实会话验证（需要凭据；沿用 SMOKE_SESSION 的做法）
 #    要回答两件事：
@@ -274,6 +283,6 @@ diff -u /tmp/preset-codex-ptc.yml /tmp/new-ptc.yml
 | name/description 透传与 order 排序 | `@deepseek-ai/dsh-agent-preset-registry/lib/index.js`（`.sort((a,b) => (a.order ?? Infinity) - …)`） |
 | UI 回退文案与内置 id 白名单 | `dsh-src/packages/client/ui-agent-preset/src/client/{locales.ts,settings-store.ts,PresetGuideDialog.tsx}` |
 | 生成器现状（358 行、单一来源、anchor、selftest） | `scripts/sync-preset-codex.mjs`（#53） |
-| 锚点与漂移门禁 | `scripts/preset-anchors.json`（SHA256，baseline `0.2.1-rc.2`）+ `ci / preset-drift` |
-| `--base ptc` 当前会失败（无 anchor） | 本机实测 `--base ptc --check` → `FAIL: no anchor recorded for "ptc"`，exit 1 |
+| 锚点与漂移门禁 | `scripts/preset-anchors.json`（SHA256，baseline `0.2.2-rc.1`）+ `ci / preset-drift` |
+| `--base ptc` 已可用（anchor 已登记） | 2026-11-10 实测 `--base ptc --check` → exit 0（`sources.ptc = ce02148b…`） |
 | 无法 inherit / 如何避免漂移 | [`docs/community-maintenance-notes.md`](community-maintenance-notes.md)、[`docs/web-preset.md`](web-preset.md) |

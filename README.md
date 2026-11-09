@@ -63,7 +63,7 @@ they are backend-independent.
 
 ## 3. Install
 
-Requires a DSH with the plugin CLI (`dsh 0.2.1-rc.2` verified) and `pnpm` on `PATH`.
+Requires a DSH with the plugin CLI (`dsh 0.2.2-rc.1` verified) and `pnpm` on `PATH`.
 
 ```sh
 # from a checkout
@@ -90,6 +90,12 @@ The annotation matters — `disabled: true` alone could come from the template (
 never be moved into `dependencies`: the host shares one instance, and a second copy fails
 module resolution. A link install keeps them unresolved in the profile's
 `node_modules`; that is normal and is why [§5.1](#51-host-packages-do-not-resolve-from-a-profile-directory) exists.
+
+**Prerelease ranges must be enumerated one by one.** Semver's prerelease rule means
+`^0.2.1-rc.2` does *not* match `0.2.2-rc.1` (a prerelease range matches only prereleases
+with the same major.minor.patch tuple), so the range is explicitly
+`^0.2.0-rc.2 || ^0.2.1-rc.2 || ^0.2.2-rc.1`. With the shorter range, `pnpm` auto-installs
+a 0.2.1-rc.5 copy next to the host's 0.2.2-rc.1 instead of treating it as satisfied.
 
 ### Configuration
 
@@ -203,9 +209,11 @@ dsh --profile <p> --patch <overlay.yml> </dev/null
 - assembly + real boot (`§3`): install into a minimal profile; `compaction-basic` disabled
   *and attributed*; `compaction-codex` mounted; no stale-override warning; negative control
   still live; real base resolved and `CodexCompactionEngine` constructed **inside a real boot**;
-- **end-to-end on a real model** (`§4`): a real two-turn session emitted
+- **end-to-end on a real model** (`§4`), re-run on `dsh 0.2.2-rc.1` (2026-11-10; first
+  verified 2026-10-18 on 0.2.1-rc.2): a real two-turn session emitted
   `compaction/start(21) → compaction/summary(23) → user/message(24) → compaction/end(25)`,
-  with `provider=deepseek-official`, `model=deepseek-flash` and `cacheReadTokens=8064`.
+  with `provider=deepseek-official`, `model=deepseek-flash` and `cacheReadTokens=7936`
+  (`8064` in the earlier 0.2.1-rc.2 run).
 
 **Not verified**: display metadata **as rendered in the Web UI** (asserted complete and
 resolvable by `scripts/verify-pack.mjs`, but no screenshot — §9), `npm publish` itself

@@ -1,7 +1,12 @@
 # dsh-compress-codex
 
-一个 DSH **bundle**：在 `ctx.compaction` 接缝上把压缩策略换成 **Codex 风格**——
-事务契约仍用 DSH 的，只换策略。
+一个 DSH **bundle**：在 `ctx.compaction` 接缝上把压缩策略换成
+**D1–D5 策略维度对齐 Codex** 的实现——事务契约沿用 DSH 的，只换策略。
+
+> **来源归属，精确表述。** D1（触发）与 D4（摘要提示词）来自 Codex，D2/D5 也有一部分来自 Codex。
+> **D3（保留）与防漂移 / 幂等层（#9）是 DSH 自研**——Codex *没有显式的防漂移机制*，
+> 所以**不得**把整个插件称为"Codex 风格"。见 [`docs/codex-dsh-mapping.md`](docs/codex-dsh-mapping.md)
+> §4：`lib/core/idempotence.js` 明确*不是* Codex 移植。
 
 - 五个自由度 **D1 触发 / D2 切分 / D3 保留 / D4 摘要 / D5 注入**：[`docs/PLAN.md`](docs/PLAN.md) §1.3
 - Codex 源码级规格（每条结论都带文件+行号证据）：[`docs/codex-notes.md`](docs/codex-notes.md)
@@ -50,7 +55,7 @@ Codex 对这三条都有答案——但只有一部分能通过 DSH 的 C1–C5 
 
 ## 3. 安装
 
-需要带插件 CLI 的 DSH（已在 `dsh 0.2.1-rc.2` 验证）以及 `PATH` 上的 `pnpm`。
+需要带插件 CLI 的 DSH（已在 `dsh 0.2.2-rc.1` 验证）以及 `PATH` 上的 `pnpm`。
 
 ```sh
 # 从本地 checkout
@@ -76,6 +81,11 @@ dsh --profile <你的 profile> --dump-config | grep -B1 -A3 -E 'id: compaction-(
 是 **peerDependencies**（同时也是 devDependencies）。**绝不能**挪进 `dependencies`：
 宿主共享同一实例，第二份拷贝会导致解析失败。link 安装时它们在 profile 的
 `node_modules` 里不会被解析——这是正常的，也正是 [§5.1](#51-宿主包无法从-profile-目录解析) 存在的原因。
+
+**prerelease 的 range 必须逐个枚举。** semver 的 prerelease 规则下，`^0.2.1-rc.2` **不匹配**
+`0.2.2-rc.1`（prerelease range 只匹配 major.minor.patch 元组相同的 prerelease），所以 range
+写成 `^0.2.0-rc.2 || ^0.2.1-rc.2 || ^0.2.2-rc.1`。若用较短的 range，`pnpm` 会在宿主的
+`0.2.2-rc.1` 之外再自动装一份 `0.2.1-rc.5`，而不是认为 peer 已满足。
 
 ### 配置
 
@@ -182,9 +192,11 @@ dsh --profile <p> --patch <overlay.yml> </dev/null
 - 装配 + 真实启动（§3）：装进极小 profile；`compaction-basic` 被禁用**且归因到本 bundle**；
   `compaction-codex` 已挂载；无陈旧 override 警告；负控仍然启用；**真实启动内**解析出真基类
   并构造出 `CodexCompactionEngine`；
-- **真实模型上的端到端**（§4）：真实两轮会话产生
+- **真实模型上的端到端**（§4）：已在 `dsh 0.2.2-rc.1` 上复跑通过（2026-11-10；首次验证是
+  2026-10-18 的 `0.2.1-rc.2`）。真实两轮会话产生
   `compaction/start(21) → compaction/summary(23) → user/message(24) → compaction/end(25)`，
-  且 `provider=deepseek-official`、`model=deepseek-flash`、`cacheReadTokens=8064`。
+  且 `provider=deepseek-official`、`model=deepseek-flash`、`cacheReadTokens=7936`
+  （`0.2.1-rc.2` 那轮为 `8064`）。
 
 **未验证**：展示元数据在 **Web UI 中的实际渲染**（`scripts/verify-pack.mjs` 已断言其可解析且完整，
 但**没有截图**，见 §9）；`npm publish` 本身（本仓库无 `NPM_TOKEN`）；多次压缩叠加下的长会话质量（#9）；

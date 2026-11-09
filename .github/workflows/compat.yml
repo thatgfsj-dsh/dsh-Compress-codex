@@ -3,10 +3,12 @@ name: compat
 # Forward-compatibility watch for dsh@next (docs/PLAN.md §6, risk
 # "dsh-compaction-basic 内部结构随版本变动").
 #
-# This workflow is deliberately NOT a required status check:
-#   `continue-on-error: true` keeps prerelease drift visible in the UI without
-#   ever being able to block main. Branch protection gates exactly ci / linux,
-#   ci / windows, ci / macos and ci / node22.
+# This job is deliberately NOT a required status check, so it can never block
+# main: branch protection gates exactly ci / linux, ci / windows, ci / macos and
+# ci / node22. It must still FAIL loudly. #71 removed a job-level
+# `continue-on-error: true` because that kept the RUN green while
+# `ci / compat-next` itself had been red for days: prerelease drift was hidden
+# instead of visible, which is the opposite of this file's purpose.
 on:
   schedule:
     - cron: '23 3 * * *'
@@ -30,7 +32,6 @@ jobs:
   compat-next:
     name: ci / compat-next
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -41,10 +42,10 @@ jobs:
       # check genuinely exercises the prerelease rather than the shipped one.
       #
       # NOTE the scoped name. The npm package is @deepseek-ai/dsh (dist-tag
-      # `next` -> 0.2.1-rc.2); a bare `dsh` on npm is an UNRELATED package
+      # `next` -> 0.2.2-rc.1); a bare `dsh` on npm is an UNRELATED package
       # (1.0.1) with no `next` tag, and installing it would silently test the
-      # wrong thing. Verified 2026-10-17: `npm view @deepseek-ai/dsh dist-tags`
-      # => { latest: 0.2.0-rc.2, next: 0.2.1-rc.2, alpha: 0.2.1-alpha.5 }.
+      # wrong thing. Verified 2026-11-10: `npm view @deepseek-ai/dsh dist-tags`
+      # => { latest: 0.2.2-rc.1, next: 0.2.2-rc.1, alpha: 0.2.2-alpha.3 }.
       - name: Install @deepseek-ai/dsh@next into a throwaway prefix
         run: npm install --global --prefix "$RUNNER_TEMP/dsh-next" @deepseek-ai/dsh@next
 
@@ -80,8 +81,8 @@ jobs:
 
       # Preset roster drift, measured against the prerelease: the early signal
       # that @deepseek-ai/dsh-web-app changed the preset preset-codex is
-      # generated from (scripts/preset-anchors.json). Non-gating by construction,
-      # because this job is continue-on-error.
+      # generated from (scripts/preset-anchors.json). Non-gating because this
+      # context is not a required check -- not because a failure is hidden.
       - name: Preset anchor drift vs dsh@next
         env:
           DSH_BIN: ${{ runner.temp }}/dsh-next/bin/dsh
