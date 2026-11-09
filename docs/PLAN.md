@@ -4,8 +4,9 @@
 > 以 [§5.1 终态复核](#51-终态复核2026-10-18) 为准**（2026-10-18 逐项核对源码与验证记录），
 > §7 的决策点也已逐条收敛。
 > 仓库：https://github.com/Thatgfsj/dsh-Compress-codex
-> 已验证基线：本机 `dsh --version = 0.2.1-rc.2`（真实模型端到端见
-> [`docs/runtime-verification.md`](runtime-verification.md) §4）
+> 已验证基线：本机 `dsh --version = 0.2.2-rc.1`（真实模型端到端见
+> [`docs/runtime-verification.md`](runtime-verification.md) §4；2026-10-18 的历史记录为
+> `0.2.1-rc.2`）
 
 ## 0. 一句话
 
@@ -219,7 +220,7 @@ M2 的 #5 / #6 可并行（不同 owner、写入范围不重叠）；#7、#8 依
 | #9 幂等与防漂移 | ✅ 完成 | `lib/core/idempotence.js` + 引擎 ledger/admit/antiDrift；`test/idempotence.test.mjs` |
 | #10 失败与降级 | ✅ 完成 | `lib/core/errors.js`；`test/errors.test.mjs`、`test/transaction-sequence.test.mjs` |
 | #11 测试矩阵 | ✅ 完成：终验的 2 条存活变异（F1 屏障比例、F2 单元起点）已由 #46 修复。**已在 rebase 后的 main 上独立复测这两条变异，均被抓住**：F1（`releasesEnough` 恒为 true）→ `test/select.test.mjs` 24 pass / 1 fail；F2（单元起点去掉平衡守卫）→ 全量 257 pass / 1 fail；未变异基线 258 / 0 | `test/select.test.mjs`、`test/invariants.test.mjs` |
-| #12 真实运行时冒烟 | ✅ 完成：装配层 + **会话级已在真实模型上验证通过** | `scripts/smoke-runtime.mjs` A1–A7；`runtime-verification.md` §3/§4 |
+| #12 真实运行时冒烟 | ✅ 完成：装配层 + **会话级已在真实模型上验证通过**（2026-11-10 在 `dsh 0.2.2-rc.1` 复跑通过） | `scripts/smoke-runtime.mjs` A1–A7；`runtime-verification.md` §3/§4 |
 | #13 可观测性 | ✅ **模块 + 接线已合**；边界：**报告行尚未在真实会话日志中被观察过** | `lib/core/telemetry.js` + 测试；`lib/engine.js` 已 import `buildCompactionReport/renderCompactionReport/reportLevel` |
 | #14 文档 | ✅ 完成 | README / README.zh / architecture / release / runtime-verification |
 | #15 发布 | ✅ 完成 | `release.yml` + `scripts/verify-pack.mjs`（10/10 故障注入）；Web UI 外观未验证 |
@@ -236,16 +237,17 @@ M2 的 #5 / #6 可并行（不同 owner、写入范围不重叠）；#7、#8 依
 | 风险 | 影响 | 缓解 | 终态 |
 |---|---|---|---|
 | 溢出恢复 listener 随 `disabled: true` 丢失 | 上下文溢出后无法自愈 | #4 的验证任务先出结论；必要时自建 listener | ✅ **已消解**：两个 listener 由实例构造函数注册，继承即继承（§2.3 源码证据） |
-| `dsh-compaction-basic` 内部结构随版本变动 | 继承点破裂 | 版本区间锁定 + `ci / compat-next` 作业（非门禁，红不阻塞） | ⏳ **持续**：`compat.yml` 已上线 |
+| `dsh-compaction-basic` 内部结构随版本变动 | 继承点破裂 | 版本区间锁定 + `ci / compat-next` 作业（非门禁：不是 required check，失败不阻塞 main；但 #71 起去掉 job 级 `continue-on-error`，漂移会显式变红而不再被吞成绿） | ⏳ **持续**：`compat.yml` 已上线 |
 | Codex 语义与 DSH 契约不完全对齐（如 Codex 无 tool-pairing 约束） | 直接照搬会产出非法请求 | 以 C1-C5 为上位约束，Codex 只借**策略**不借**契约** | ✅ **已按此实施**（`docs/codex-dsh-mapping.md`） |
-| 摘要成本上升（结构化模板更长） | 每次压缩更贵 | 模板字段按"续跑必需"最小集，expensive 字段可选 | ✅ 已实施；真实会话实测 `cacheReadTokens=8064`（前缀缓存命中） |
+| 摘要成本上升（结构化模板更长） | 每次压缩更贵 | 模板字段按"续跑必需"最小集，expensive 字段可选 | ✅ 已实施；真实会话实测 `cacheReadTokens=8064`（0.2.1-rc.2）/ `7936`（0.2.2-rc.1），前缀缓存命中 |
 | 多轮压缩语义漂移 | 长会话质量衰减 | #9 专项 | ✅ 已实施（#9）；**但长会话质量仍未实测**（A7 只观测到一次压缩） |
 
 ## 7. 决策点（**已逐条收敛**）
 
 - **Q1 架构** → **B（策略层继承）**，已实施；§2.3 的源码证据 + A7 实测共同证实。
-- **Q2 兼容基线** → 只锁 `0.2.1-rc.2` 并验证；`dsh 0.2.0-rc.2` **未验证**（`engines.dsh` 未声明，
-  因此兼容性由 peer 区间决定）。`ci / compat-next` 持续观察 `dsh@next`。
+- **Q2 兼容基线** → 当前验证基线是 `0.2.2-rc.1`（2026-11-10，含真实模型 A7 复跑）；
+  `0.2.1-rc.2` 保留为 2026-10-18 的历史记录；`dsh 0.2.0-rc.2` **未验证**（`engines.dsh` 未声明，
+  因此兼容性由 peer 区间决定，且 prerelease 区间逐个枚举）。`ci / compat-next` 持续观察 `dsh@next`。
 - **Q3 配置默认** → **Codex 三段式**（`triggerLimitRatio 0.9` / `effectiveWindowPercent 0.95` /
   `turnEndPercent 0` / `triggerBufferTokens 0`）+ 结构保留，见 `docs/design-m1-m2.md` §5。
 - **Q4 交付形态** → 发 npm 包（bundle 形态）；安装走 `dsh plugin add`，未做"一键替换 profile"脚本。

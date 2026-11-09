@@ -96,10 +96,10 @@ const fail = (message) => failures.push(message)
 // once upstream drops X, which is a silent pass.
 const REQUIRED = [
   {
-    id: 'O1 tool-presentation is in ptc mode',
-    sourcePattern: /mode:\s*ptc/,
-    generatedPattern: /mode:\s*ptc/,
-    vacuous: 'the upstream preset no longer declares mode: ptc'
+    id: 'O1 the ptc-only tool-executor row survives',
+    sourcePattern: /- id:\s*tool-executor-ptc\s*\n\s*name:\s*'@deepseek-ai\/dsh-tool-executor-ptc'/,
+    generatedPattern: /- id:\s*tool-executor-ptc\s*\n\s*name:\s*'@deepseek-ai\/dsh-tool-executor-ptc'/,
+    vacuous: 'the upstream preset no longer carries the ptc-only tool-executor row'
   },
   {
     id: 'O2 workflow-ptc and tool-workflow stay disabled',
@@ -115,11 +115,11 @@ const REQUIRED = [
   }
 ]
 
-// O1/O2 describe the ptc base specifically; the standard base has neither a
-// mode: ptc row nor the disabled workflow rows, so requiring them there would
-// fail for the wrong reason. Applicability is decided by the SOURCE, and a
-// source that should have carried them but does not is reported as vacuous.
-const PTC_ONLY = new Set(['O1 tool-presentation is in ptc mode', 'O2 workflow-ptc and tool-workflow stay disabled'])
+// O1/O2 describe the ptc base specifically; the standard base has neither the
+// ptc-only tool-executor row nor the disabled workflow rows, so requiring them
+// there would fail for the wrong reason. Applicability is decided by the SOURCE,
+// and a source that should have carried them but does not is reported as vacuous.
+const PTC_ONLY = new Set(['O1 the ptc-only tool-executor row survives', 'O2 workflow-ptc and tool-workflow stay disabled'])
 const isPtc = /- id: preset-ptc/.test(source)
 
 for (const rule of REQUIRED) {
@@ -268,7 +268,8 @@ done
 # docs/ci-codex-ptc.md section 5.3. This is what keeps the PASS above from being
 # an artifact of a checker that never fails.
 # Fault injection runs against EVERY generated artifact, so a mutation that only
-# applies to one base (e.g. mode: ptc) is still exercised on the base that has it.
+# applies to one base (e.g. the ptc-only executor row) is still exercised on the
+# base that has it.
 # A base with no artifact is skipped loudly; a mutation that cannot apply to an
 # artifact that DOES exist is a real gap and counts as a miss.
 FAULTS=0
@@ -307,8 +308,8 @@ for BASE in $BASES; do
   mutate "$ARTIFACT" "$ARTIFACT_SOURCE" "$BASE: compaction-codex -> compaction-basic" "id: compaction-codex" "id: compaction-basic"
   mutate "$ARTIFACT" "$ARTIFACT_SOURCE" "$BASE: plugin row renamed back to the official backend" "name: 'dsh-compress-codex'" "name: '@deepseek-ai/dsh-compaction-basic'"
   mutate "$ARTIFACT" "$ARTIFACT_SOURCE" "$BASE: preset row id rewritten" "- id: preset-codex" "- id: preset-baseline"
-  if grep -q "mode: ptc" "$ARTIFACT"; then
-    mutate "$ARTIFACT" "$ARTIFACT_SOURCE" "$BASE: mode ptc -> native" "mode: ptc" "mode: native"
+  if grep -q "id: tool-executor-ptc" "$ARTIFACT"; then
+    mutate "$ARTIFACT" "$ARTIFACT_SOURCE" "$BASE: ptc-only executor row renamed" "id: tool-executor-ptc" "id: tool-native"
   fi
 done
 

@@ -2,6 +2,11 @@
 
 > **只调查，不改 workflow。** 本文只回答「判什么 / 能不能离线判 / 作业长什么样 / 怎么不假绿」。
 > 证据标记：**[证据]** 本机实测或源码原文；**[推断]** 由证据推导；**[未验证]** 没跑过。
+>
+> **修订（2026-11-10，dsh 0.2.2-rc.1）**：上游把 ptc preset 的 `tool-presentation`
+> （`@deepseek-ai/dsh-agent-tool-presentation`，`config.mode: ptc`）换成了
+> `tool-executor-ptc`（`@deepseek-ai/dsh-tool-executor-ptc`，无 `mode:` 字段）。
+> 下面 O1/O6、§2、§5 的判据已按新行名更新；旧的 `mode: ptc` 写法保留在历史说明里。
 > 配套阅读：[`docs/codex-ptc-options.md`](codex-ptc-options.md)（codex × ptc 组合可行性）、
 > [`docs/community-maintenance-notes.md`](community-maintenance-notes.md)（机制选型）。
 
@@ -9,8 +14,9 @@
 
 ## 0. 结论先行
 
-1. **离线（不连模型、不需要凭据）能判的是一大类静态/组合/挂载事实**：生成物里 `tool-presentation` 存在且
-   `mode: ptc`、`workflow-ptc`/`tool-workflow` 仍 `disabled: true`、compaction 组已 retarget、与上游
+1. **离线（不连模型、不需要凭据）能判的是一大类静态/组合/挂载事实**：生成物里 ptc-only 的
+   `tool-executor-ptc` 行存在（`0.2.1-rc.2` 时是 `tool-presentation` + `mode: ptc`）、
+   `workflow-ptc`/`tool-workflow` 仍 `disabled: true`、compaction 组已 retarget、与上游
    `ptc.patch.yml` 的逐行 diff 只有预期行、装进临时 profile 后组合树可挂载。**这些已实测**（§2）。
 2. **CI 今天跑不了真实会话。** 仓库没有任何 secret（`actions/secrets` → `total_count: 0`，
    `environments` → `total_count: 0`），没有任何 workflow 注入 `DEEPSEEK_API_KEY`，`compat.yml` 还把
@@ -30,12 +36,12 @@
 
 | # | 判据 | 实测结论 | 依据 |
 |---|---|---|---|
-| O1 | 生成物含 `tool-presentation`，且 `config.mode: ptc` | 成立（生成物 127–130 行） | **[证据]** 本机跑生成器 |
-| O2 | `workflow-ptc` 与 `tool-workflow` 仍是 `disabled: true` | 成立（108–115 行） | **[证据]** 同上 |
+| O1 | 生成物含 ptc-only 的 `tool-executor-ptc` 行及其模块名（`0.2.1-rc.2` 时是 `tool-presentation` + `config.mode: ptc`） | 成立（生成物 131–132 行；本判据由 `preset-drift-check.sh --offline` 的 O1 强制执行） | **[证据]** 本机跑生成器（`dsh 0.2.2-rc.1`） |
+| O2 | `workflow-ptc` 与 `tool-workflow` 仍是 `disabled: true` | 成立（112–119 行） | **[证据]** 同上 |
 | O3 | 隔离 compaction 组已 retarget：`compaction-codex` / `dsh-compress-codex`，且 `command-compact`、`tool-result-pruner` 保留 | 成立 | **[证据]** 同上 |
-| O4 | 生成物与上游 `ptc.patch.yml` 的逐行 diff = 预期行集合 | 实测共 21 行差异：头部 3 行→7 行、`preset-<base>`→`preset-codex`、`config.id`/`order`、compaction 两行、末尾空行 | **[证据]** `diff` 输出 |
-| O5 | 上游 ptc 源文件的 SHA256 anchor 已记录 | **未成立**：`scripts/preset-anchors.json` 目前只有 `standard`；ptc 的哈希是 `9e355c947bf61c3d2fe9bf3214b386f83c0d99d37579ce22576d4b82cb6e1a2c` | **[证据]** 实测 |
-| O6 | 组合层：把生成物装进临时 profile 后 `--dump-config` 能看到该 preset 行、其内 `tool-presentation(mode: ptc)`、`compaction-codex`，且**无** `patch: entry ... not found` | 成立（dump exit 0，未解析 patch 目标 0 条） | **[证据]** 临时 `DSH_HOME` 实测 |
+| O4 | 生成物与上游 `ptc.patch.yml` 的逐行 diff = 预期行集合 | 5 处语义行被改写（`preset-<base>`、`config.id`、`order`、compaction 两行）+ 7 行生成头；其余逐字相同 | **[证据]** `diff` 输出 |
+| O5 | 上游 ptc 源文件的 SHA256 anchor 已记录 | 成立：`sources.ptc = ce02148b…`（baseline `0.2.2-rc.1`；历史 `0.2.1-rc.2` 为 `9e355c94…`） | **[证据]** `scripts/preset-anchors.json` 实测 |
+| O6 | 组合层：把生成物装进临时 profile 后 `--dump-config` 能看到该 preset 行、其内 `tool-executor-ptc`（历史：`tool-presentation(mode: ptc)`）、`compaction-codex`，且**无** `patch: entry ... not found` | 成立（dump exit 0，未解析 patch 目标 0 条；本轮在 `0.2.2-rc.1` 上由 O1–O4 覆盖静态部分） | **[证据]** 临时 `DSH_HOME` 实测 |
 | O7 | 挂载层：`ptc` 模式在部署缺少兼容 PTC runtime 时，registry 会在**挂载期拒绝**并指名该行；因此「能挂载」本身就是可判据 | 官方 README 原文成立；A6 式 boot 探测**不需要凭据**（boot 到 `a task is required` 即返回，无模型调用） | **[证据]** `dsh-agent-tool-presentation/README.md` + `smoke-runtime.mjs` A6 源码 |
 | O8 | UI 元数据：生成物 `config.name`/`config.description` 非空（修「暂无描述。」） | 取决于生成器参数化（见 `codex-ptc-options.md` §6），当前仍硬编码 | **[推断]** |
 
@@ -61,7 +67,7 @@ node -e 'const fs=require("node:fs"),c=require("node:crypto");const p="/tmp/ptc-
   j.sources.ptc=c.createHash("sha256").update(fs.readFileSync(process.argv[1],"utf8")).digest("hex");
   fs.writeFileSync(p,JSON.stringify(j,null,2))' "$DSH_NODE/@deepseek-ai/dsh-web-app/presets/ptc.patch.yml"
 node scripts/sync-preset-codex.mjs --base ptc --anchors /tmp/ptc-anchors.json --out /tmp/codex-ptc.yml
-grep -n -A 3 'tool-presentation' /tmp/codex-ptc.yml        # O1
+grep -n -A 3 'tool-executor-ptc' /tmp/codex-ptc.yml      # O1（0.2.1-rc.2 时为 tool-presentation）
 grep -n -A 1 'workflow-ptc\|tool-workflow' /tmp/codex-ptc.yml  # O2
 grep -n 'compaction-codex\|dsh-compress-codex' /tmp/codex-ptc.yml  # O3
 diff "$DSH_NODE/@deepseek-ai/dsh-web-app/presets/ptc.patch.yml" /tmp/codex-ptc.yml  # O4
@@ -69,10 +75,13 @@ diff "$DSH_NODE/@deepseek-ai/dsh-web-app/presets/ptc.patch.yml" /tmp/codex-ptc.y
 
 实测要点：
 
-- ptc 源文件 **134 行**，SHA256 `9e355c947bf61c3d2fe9bf3214b386f83c0d99d37579ce22576d4b82cb6e1a2c`；
-- 生成器对 `--base ptc` **已能工作**（6 处计数重写全部命中）；但 `--preset-id/--config-id/--order`
-  仍硬编码为 `preset-codex`/`codex`/`0`，产出 `codex-ptc` 前需要先做 `codex-ptc-options.md` §6 的参数化；
-- diff 的 21 行里，**只有 6 行是语义改动**（preset id、config.id、order、两行 compaction），其余是头部注释与一个空行。
+- ptc 源文件在 `0.2.2-rc.1` 上仍是 **134 行**，SHA256
+  `ce02148b1fd575cc93071744180468cd305bdcd50dbfdd3b9b0605c5281d283d`（`0.2.1-rc.2` 时为
+  `9e355c94…`）；
+- 生成器对 `--base ptc` **已能工作**（6 处计数重写全部命中），`--preset-id/--config-id/--order`
+  也已参数化，可直接产出 `codex-ptc`；
+- diff 里**只有 5 行是语义改动**（preset id、config.id、order、两行 compaction），其余是 7 行生成头
+  与末尾一个空行。
 
 ```sh
 # O6：装进临时 profile 再 dump（组合作层验证）
@@ -156,10 +165,10 @@ C 档的关键性质：**CI 判的是「这份日志满足判据」，而不是�
 
 1. **三态退出码 + 判词字面**：`0 → PASS`、`1 → FAIL`、`2 → INCOMPLETE — SKIPPED`。
    INCOMPLETE 分支**禁止出现 PASS 字样**，并用 `grep -q 'PASS'` 在作业内自测这条性质（别靠人眼）。**[推断]**
-2. **空集合断言陷阱**：断言「生成物里有 `mode: ptc`」之前，必须先断言「**源文件里本来就有** `mode: ptc` /
-   两条 `disabled: true`」。否则上游哪天删掉该行，产物侧断言会退化成对不存在的东西做检查而**假绿**。
+2. **空集合断言陷阱**：断言「生成物里有 `tool-executor-ptc`」之前，必须先断言「**源文件里本来就有**
+   该行 / 两条 `disabled: true`」。否则上游哪天删掉该行，产物侧断言会退化成对不存在的东西做检查而**假绿**。
    这与 `smoke-runtime.mjs` 的 A5 negative control 是同一手法。**[推断]**
-3. **fault injection（必须变红的变异）**：生成物 `mode: ptc` → `native`；删一条 `disabled: true`；
+3. **fault injection（必须变红的变异）**：生成物 `tool-executor-ptc` 行改名；删一条 `disabled: true`；
    `compaction-codex` → `compaction-basic`；篡改 anchor（单字节）→ 每条都必须让判据红。沿用
    `sync-preset-codex.mjs --selftest` 的既有模式，在 CI 里每次跑。**[推断]**
 4. **O4 的期望差异必须由脚本计算**（比对「源 → 生成物」的 6 处重写），**不要写死 21 行**：
@@ -171,8 +180,8 @@ C 档的关键性质：**CI 判的是「这份日志满足判据」，而不是�
 
 ## 6. 待补 / 待验证清单
 
-1. `scripts/preset-anchors.json` 需要补 `ptc` 的 anchor（`9e355c94…`）——否则 `--base ptc` 会以
-   「no anchor recorded」失败。**[证据]**
+1. ✅ 已完成：`scripts/preset-anchors.json` 已有 `standard` + `ptc` 两个 anchor，baseline
+   `0.2.2-rc.1`（2026-11-10 用本机 dsh 重设）。
 2. 生成器需要参数化 `--preset-id/--config-id/--order/--name/--description`，O8（UI 元数据）才可断言。**[推断]**
 3. O7 的 boot 探测在 **codex-ptc** 下是否也能像 A6 一样在无凭据时走到 app stage：**未跑过**。**[未验证]**
 4. 若走 A 档真实会话：单轮 token 成本、超时上限、fork PR 的行为都需要实测。**[未验证]**

@@ -33,12 +33,19 @@ dsh --profile web --dump-config >/dev/null && echo "PARSE OK"
 
 ## 验证
 
-组合级语义等价：与上游 `ptc.patch.yml` 的 diff 只有 compaction 两行 + id/name/description/order。
-其余 128 行逐字相同。
+组合级语义等价：与上游 `ptc.patch.yml` 的 diff 只有 5 处语义行（`preset-ptc` →
+`preset-codex-ptc`、`config.id`/`order`、compaction 两行）+ 7 行生成头，其余行逐字相同。
+所以 PTC 侧的任何上游行都被原样复制，生成器不解释它们的语义。
+
+> **上游变更（`dsh 0.2.2-rc.1`）**：ptc preset 里原来的
+> `tool-presentation`（`@deepseek-ai/dsh-agent-tool-presentation`，`config.mode: ptc`）
+> 已被 `tool-executor-ptc`（`@deepseek-ai/dsh-tool-executor-ptc`）取代，新行没有
+> `mode:` 字段。PTC 呈现语义不变，变化的是行名与模块名；生成器逐行复制，不关心这个差异，
+> 但下面按行统计的判据要按新名字数。
 
 | 项 | 期望 |
 |---|---|
-| `mode: ptc` | 1 |
+| `tool-executor-ptc`（`0.2.1-rc.2` 时是 `tool-presentation` + `mode: ptc`） | 1 |
 | `disabled: true` | 4 |
 | `compaction-codex` | 1 |
 | `compaction-basic` | 0 |

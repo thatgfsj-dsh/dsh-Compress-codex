@@ -46,8 +46,11 @@ node scripts/sync-preset-codex.mjs --out preset-codex.patch.yml
 ```
 
 - 单一来源：`<dsh>/node_modules/@deepseek-ai/dsh-web-app/presets/standard.patch.yml`
-  （128 行、`- insert:` 形态的**完整 patch**）。因此生成不受你自己的 profile patch 影响，
-  也不需要从组合后的缩进里反推结构，更不会把上游的字符串重新折行；
+  （`dsh 0.2.2-rc.1` 上 130 行、`- insert:` 形态的**完整 patch**）。因此生成不受你自己的
+  profile patch 影响，也不需要从组合后的缩进里反推结构，更不会把上游的字符串重新折行；
+  上游 roster 的变化（例如 0.2.2-rc.1 给 `tool-fs` 加了 `config.applyPatch: false`、
+  把 `tool-subagent` 的 `modelSelectionSettings` 拆成 `modelSelection`/`modelDiscovery`）
+  会被逐行复制，生成器只改写身份与 compaction 那 6 处；
 - 生成结果是一个**新增** preset（id `codex`，order 0），**默认 preset 仍是 standard** ——
   可先安全试用：在 Web UI 的 preset 选择器里选 `codex` 即可，不必改默认。
 
@@ -89,7 +92,7 @@ preset-codex 终究是上游 preset 的**副本**：上游新增工具 / 改 sys
 ```
 $ node scripts/sync-preset-codex.mjs --check
 sync-preset-codex: FAIL: the upstream preset changed (anchor mismatch)
-  expected: 0d398d2a…
+  expected: 3006cc37…
   actual  : 9f1c…
 ```
 
@@ -111,8 +114,9 @@ node scripts/sync-preset-codex.mjs --out preset-codex.patch.yml      # 重新生
    源文件不可达必须报告 INCOMPLETE。
 
 拿不到 dsh / 源文件时，作业报告 `PRESET-DRIFT: INCOMPLETE — SKIPPED`（带 `::warning::` 注解），
-**不会说 PASS**：本项目的规矩是 skip 不等于 pass。`ci / compat-next`（同样非门禁）另外对
-`dsh@next` 跑一次同样的校验，作为上游漂移的早期信号。
+**不会说 PASS**：本项目的规矩是 skip 不等于 pass。`ci / compat-next`（同样不是 required check）
+另外对 `dsh@next` 跑一次同样的校验，作为上游漂移的早期信号；#71 起它不再用 job 级
+`continue-on-error` 把失败藏成绿，所以漂移会让这个非门禁作业显式变红。
 
 ## 为什么「复制」不可避免，以及最小副本面
 
@@ -126,12 +130,15 @@ node scripts/sync-preset-codex.mjs --out preset-codex.patch.yml      # 重新生
   （社区方案与出处见 [`docs/community-maintenance-notes.md`](community-maintenance-notes.md)。）
 
 **最小副本面评估**：由于覆盖语义是「整份 restate」，我们无法只抄 `compaction` 那一组——
-其余 21 项必须原样保留，否则 preset 会丢掉工具与 system prompt。所以真正可控的不是「少抄几行」，
+其余 21 个顶层 plugin 行必须原样保留，否则 preset 会丢掉工具与 system prompt。所以真正可控的不是「少抄几行」，
 而是让复制成为**生成产物 + anchor 校验**：上游一变就显式失败，并给出可 review 的 diff。
 
 ## 已验证 / 未验证
 
 - 已验证：
+  - anchor 已按 `dsh 0.2.2-rc.1` 重设：`standard` = `3006cc37…`、`ptc` = `ce02148b…`
+    （`scripts/preset-anchors.json` 的 `baseline` 也手工改为 `0.2.2-rc.1`，因为
+    `--update-anchor` 不改 `baseline`）；`--check` 退出 0、`--selftest` 27/27 通过；
   - 生成器从上游 `standard.patch.yml` 生成，anchor 校验通过（`--check` 退出 0）；
   - **组合级语义等价**：把新旧两种生成结果分别装进临时 web profile 后 dump，
     `preset-codex` 子树的 33 个 plugin id、name 序列、isolate/order 与 plan-mode 文本完全一致；

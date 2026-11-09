@@ -446,8 +446,13 @@ function ptcPreservationFailures(sourceText, outputText) {
     const got = count(outputText, re)
     if (got !== want) failures.push('OUTPUT: ' + label + ' count = ' + got + ' != source ' + want)
   }
-  preserve('mode: ptc', /^\s*mode:\s*ptc\s*$/)
-  preserve('tool-presentation row', /^\s*- id:\s*tool-presentation\s*$/)
+  // 0.2.2-rc.1 replaced the ptc presentation row: `tool-presentation`
+  // (@deepseek-ai/dsh-agent-tool-presentation, config.mode: ptc) became
+  // `tool-executor-ptc` (@deepseek-ai/dsh-tool-executor-ptc). The row AND its
+  // module are the ptc-only fact to preserve now; there is no `mode: ptc` left
+  // to assert, so asserting it would be the empty-set trap this check refuses.
+  preserve('tool-executor-ptc row', /^\s*- id:\s*tool-executor-ptc\s*$/)
+  preserve('tool-executor-ptc module', /^\s*name:\s*'@deepseek-ai\/dsh-tool-executor-ptc'\s*$/)
 
   // workflow-ptc / tool-workflow must keep their own disabled: true, which is
   // a property of the row, not a file-wide count.
@@ -581,7 +586,8 @@ function selftest() {
 
     // ---- ptc battery (#60) -------------------------------------------------
     // ptc is the base users actually run, and it differs from standard in three
-    // places: the tool-presentation row with mode: ptc, and workflow-ptc /
+    // places: the ptc-only tool-executor row (as of 0.2.2-rc.1; it used to be
+    // tool-presentation with config.mode: ptc), and workflow-ptc /
     // tool-workflow carrying disabled: true. This proves (a) the anchor table
     // can hold a second base, (b) those rows survive the copy, and (c) every
     // check above actually bites.
@@ -606,7 +612,7 @@ function selftest() {
     // (b) preservation, source fact first (see ptcPreservationFailures).
     const ptcMisses = ptcPreservationFailures(ptcText, ptcGenerated)
     record(
-      'ptc output preserves mode/tool-presentation/disabled rows',
+      'ptc output preserves tool-executor/disabled rows',
       ptcMisses.length === 0,
       ptcMisses.length === 0 ? EXIT_OK : 99,
       EXIT_OK
@@ -624,11 +630,15 @@ function selftest() {
       const misses = ptcPreservationFailures(sourceText, outputTexts)
       record('ptc check catches ' + label, misses.length > 0, misses.length, 1)
     }
-    bites('mode: ptc -> native', ptcText, ptcGenerated.replace(/^(\s*)mode:\s*ptc\s*$/m, '$1mode: native'))
+    bites(
+      'the ptc-only executor row renamed',
+      ptcText,
+      ptcGenerated.replace(/^(\s*)- id:\s*tool-executor-ptc\s*$/m, '$1- id: tool-native')
+    )
     bites('a deleted disabled row', ptcText, ptcGenerated.replace(/^(\s*)disabled:\s*true\s*$\n?/m, ''))
     bites(
-      'a source with no mode: ptc (empty-set trap)',
-      ptcText.replace(/^(\s*)mode:\s*ptc\s*$/m, ''),
+      'a source with no tool-executor-ptc row (empty-set trap)',
+      ptcText.replace(/^(\s*)- id:\s*tool-executor-ptc\s*$/m, ''),
       ptcGenerated
     )
     const untargeted = ptcGenerated.replace('compaction-codex', 'compaction-basic')

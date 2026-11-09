@@ -1,14 +1,16 @@
 # 真实运行时验证记录（M4-12 / #12）
 
 > **结论先行**：装配层（行替换是否生效 + 真实启动里是否真的挂上）**已验证**；
-> **会话层也已在真实模型上验证**（2026-10-18）：一次真实两轮会话触发了完整事务
+> **会话层也已在真实模型上验证**，且已在当前基线 `dsh 0.2.2-rc.1` 上复跑通过
+> （2026-11-10，A1–A7 同一轮 7 ok / 0 failed / 0 skipped）：一次真实两轮会话触发了完整事务
 > `compaction/start → compaction/summary → user/message → compaction/end`，摘要由
-> `deepseek-official/deepseek-flash` 真实产生。**仍未验证**的是展示元数据在 Web UI 里的
-> 渲染（只有断言，无截图，见 §9）与 `npm publish` 本身。
+> `deepseek-official/deepseek-flash` 真实产生；2026-10-18 在 `dsh 0.2.1-rc.2` 上的旧轮作为历史对照保留。
+> **仍未验证**的是展示元数据在 Web UI 里的渲染（只有断言，无截图，见 §9）与 `npm publish` 本身。
 > 本文件逐条区分，不做任何"应该没问题"的推断。
 >
 > 脚本：`scripts/smoke-runtime.mjs`（`node scripts/smoke-runtime.mjs`）
-> CI：`.github/workflows/compat.yml` 的 `ci / compat-next`（**非门禁**，`continue-on-error: true`）
+> CI：`.github/workflows/compat.yml` 的 `ci / compat-next`（**非门禁**：不是 required check，
+> 失败不阻塞 main；但 #71 起不再用 job 级 `continue-on-error` 把失败藏成绿）
 
 ## 1. 为什么必须用 `dsh plugin add`，不能用 web 模板
 
@@ -27,7 +29,7 @@ infra 在 #2 已发现：**`web` 模板本身就禁用了 `compaction-basic`**�
 
 | 项 | 值 |
 |---|---|
-| dsh | `0.2.1-rc.2`（`dsh --version`） |
+| dsh | `0.2.2-rc.1`（`dsh --version`；2026-11-10 复跑）。历史记录：2026-10-18 那一轮是 `0.2.1-rc.2` |
 | Node | `v24.21.0` |
 | OS | linux（脚本用 Node 编写，兼容 win/mac；`dsh`/`pnpm` 走 `shell: true`） |
 | pnpm | `12.11.2`（`dsh plugin add` 依赖） |
@@ -36,7 +38,29 @@ infra 在 #2 已发现：**`web` 模板本身就禁用了 `compaction-basic`**�
 
 ## 3. 已验证（本轮实测输出）
 
-`scripts/smoke-runtime.mjs` 实跑结果（2026-10-18，dsh 0.2.1-rc.2；`SMOKE_SESSION=1` 下 A7 也参与）：
+`scripts/smoke-runtime.mjs` 实跑结果（`SMOKE_SESSION=1` 下 A7 也参与）。
+
+**本轮（2026-11-10，dsh 0.2.2-rc.1，`DSH_HOME` 为临时目录，真实模型）**：
+
+```
+SMOKE     : dsh = 0.2.2-rc.1
+SMOKE OK  : A1 dsh plugin add accepted this package
+SMOKE OK  : A2 compaction-basic disabled by this bundle
+SMOKE OK  : A3 compaction-codex mounted from this package
+SMOKE OK  : A4 no unresolved patch target ("patch: entry ... not found")
+SMOKE OK  : A5 negative control: compaction-basic stays live without this bundle
+SMOKE OK  : A6 real boot: real base resolved, CodexCompactionEngine mounted, no load failure
+SMOKE OK  : A7 real session emitted compaction/start(21) -> compaction/summary(23) -> user/message(24) -> compaction/end(25)
+SMOKE     : A7 provider=deepseek-official model=deepseek-flash summaryChars=403 shadowedRange={"start":8,"end":8}
+SMOKE SUMMARY: 7 ok, 0 failed, 0 skipped
+SMOKE RESULT: PASS
+```
+
+**历史对照（2026-10-18，dsh 0.2.1-rc.2）**：同一条事务序列与结论，那一轮 `summaryChars=1749`、
+`usage.cacheReadTokens=8064`。
+
+<details>
+<summary>2026-10-18 原始输出</summary>
 
 ```
 SMOKE     : dsh = 0.2.1-rc.2
@@ -51,6 +75,8 @@ SMOKE     : A7 provider=deepseek-official model=deepseek-flash summaryChars=1749
 SMOKE SUMMARY: 7 ok, 0 failed, 0 skipped
 SMOKE RESULT: PASS
 ```
+
+</details>
 
 | 断言 | 它证明了什么 | 它**不**证明什么 |
 |---|---|---|
@@ -81,31 +107,40 @@ SMOKE RESULT: FAIL
 `compaction/start → compaction/summary → user/message → compaction/end`，且
 `compaction/summary` 的 `provider`/`model` 非空（证明摘要来自真实模型调用，不是空壳）。
 
-实测（2026-10-18，`dsh 0.2.1-rc.2`，真实 provider）：
+实测（2026-11-10，`dsh 0.2.2-rc.1`，真实 provider）：
 
 ```
 SMOKE OK  : A7 real session emitted compaction/start(21) -> compaction/summary(23) -> user/message(24) -> compaction/end(25)
-SMOKE     : A7 provider=deepseek-official model=deepseek-flash summaryChars=1749 shadowedRange={"start":8,"end":8}
+SMOKE     : A7 provider=deepseek-official model=deepseek-flash summaryChars=403 shadowedRange={"start":8,"end":8}
 SMOKE SUMMARY: 7 ok, 0 failed, 0 skipped
 SMOKE RESULT: PASS
 ```
 
+实测（2026-10-18，`dsh 0.2.1-rc.2`，历史对照）：同一事务序列、同一条结论，
+`summaryChars=1749`。
+
 > `summaryChars` 随模型输出而变（同一脚本复跑会得到不同长度，例如 1749 / 403），
 > 但**事件序列与各字段恒同**——断言用的是结构与字段，不是长度或文本内容。
+> 本轮 403 是**已记录过的模型输出变体**（旧记录就出现过 403）：模型把附加的 compaction
+> 指令当成可疑注入，reasoning 里讨论后只回 `ACK`，所以正文是 `SUMMARY_PREFIX + "\nACK"`。
+> 这是模型输出变体，不是回归；它也**不**证明摘要质量——长会话摘要质量仍是 #9 的未验证项（§4.3）。
 
-从会话日志解出的原始事件（`seq` 连续、同一 `compactionId`）：
+从会话日志解出的原始事件（2026-11-10 轮；`seq` 连续、同一 `compactionId`）：
 
 | seq | 事件 | 关键字段 |
 |---|---|---|
-| 21 | `compaction/start` | `compactionId=6dd547d0-…`、`turn=2` |
-| 23 | `compaction/summary` | `summary=[{type:"text",…}]`、`provider="deepseek-official"`、`model="deepseek-flash"`、`maxTokens=65536`、`shadowedRange={start:8,end:8}`、`shadowedTokenCount=3529`、`usage.cacheReadTokens=8064` |
+| 21 | `compaction/start` | `compactionId=…`、`turn=2` |
+| 23 | `compaction/summary` | `summary=[{type:"text",…}]`、`provider="deepseek-official"`、`model="deepseek-flash"`、`maxTokens=65536`、`shadowedRange={start:8,end:8}`、`shadowedTokenCount=3529`、`usage.inputTokens=356`、`usage.outputTokens=354`、`usage.cacheReadTokens=7936` |
 | 24 | `user/message` | `source={kind:"compact-checkpoint",compactionId:…}`，内容含 `<compacted-summary>` |
 | 25 | `compaction/end` | 同一 `compactionId` |
 
+2026-10-18 轮（`dsh 0.2.1-rc.2`）的对照：同样的 `seq` 结构（21/23/24/25），
+`summaryChars=1749`、`usage.cacheReadTokens=8064`。
+
 这一次运行同时印证了四条契约：C3（事务相邻性：`user/message` 紧邻
-`compaction/summary`）、C4（`cacheReadTokens=8064` 说明前缀缓存确实被复用）、
-C5（`summary` 是纯文本块）、D4/D5（摘要正文以 Codex 的 SUMMARY_PREFIX 开头，替换消息由
-基类框架包裹并携带检查点 source）。
+`compaction/summary`）、C4（两轮 `cacheReadTokens` 分别为 7936 / 8064，均 > 0，说明前缀缓存
+确实被复用）、C5（`summary` 是纯文本块）、D4/D5（摘要正文以 Codex 的 SUMMARY_PREFIX 开头，
+替换消息由基类框架包裹并携带检查点 source）。
 
 ### 4.1 让 A7 "能通过"的两个设计要点（改之前它**永远**不可能通过）
 
@@ -139,6 +174,9 @@ C5（`summary` 是纯文本块）、D4/D5（摘要正文以 Codex 的 SUMMARY_PR
     加载器因此把真实 `~/.dsh/profiles/headless/cordis.yml` 重写为它标准的空根配置（内容 `[]`，
     该目录 22:57 已存在）。无 session、无凭据、无用户 profile 内容受影响；此后所有命令都在
     临时 `DSH_HOME` 下运行。
+- **2026-11-10 复跑（dsh 0.2.2-rc.1）的安全核验**：真实 `~/.dsh/.credentials.yaml` 的 mtime
+  未变（仍是 `2026-11-07 18:04:23`）且 mode 600；真实 `~/.dsh/sessions/` 下无测试 slug 会话；
+  5 个真实 profile 的目录/文件 mtime 跑前跑后逐项一致；两个临时 `DSH_HOME` 均已清理。
 - 复现：
 
 ```sh
@@ -276,13 +314,15 @@ SMOKE RESULT: FAIL (1 failing assertion(s))                              # exit 
 
 ## 7. 版本区间与门禁关系
 
-- 本机已验证：`dsh 0.2.1-rc.2` + `node v24.21.0`。
+- 本机已验证：`dsh 0.2.2-rc.1` + `node v24.21.0`（2026-11-10）；历史记录 `dsh 0.2.1-rc.2`
+  （2026-10-18）。
 - `package.json` 声明的 `engines.node` = `^22.19.0 || >=24.0.0`；CI 的 `ci / node22`
   覆盖下界。
 - `dsh 0.2.0-rc.2`：**未验证**（`engines.dsh` 语义、`dsh plugin --profile` 参数位置、
   子路径展示元数据在 0.2.1 都有破坏性变更；见 `dsh-plugin-construction` 技能）。
-- `dsh@next`：由 `ci / compat-next` 每日 + 手工 + 相关路径变更时运行，**非门禁**
-  （`continue-on-error: true`），失败不阻塞 main，只作为漂移信号。
+- `dsh@next`：由 `ci / compat-next` 每日 + 手工 + 相关路径变更时运行。它**不是 required
+  check**，失败不阻塞 main；但 #71 起去掉了 job 级 `continue-on-error`，所以漂移会让它显式变红
+  而不是把整个 run 伪装成绿。
 - 必需门禁仍是 `ci / linux`、`ci / windows`、`ci / macos`、`ci / node22`。
 
 ## 8. 不碰真实环境

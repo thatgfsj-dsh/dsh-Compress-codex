@@ -1,10 +1,10 @@
 {
   "//": "Anchor = SHA256 of the upstream preset file this repo was generated from.",
   "//baseline": "The @deepseek-ai/dsh version the anchors were recorded against.",
-  "baseline": "0.2.1-rc.2",
+  "baseline": "0.2.2-rc.1",
   "//sources": "Keyed by --base name; value = sha256 of <dsh>/node_modules/@deepseek-ai/dsh-web-app/presets/<base>.patch.yml",
   "sources": {
-    "standard": "0d398d2a6872a73a106cb3bd19303ecccf1637e1fcad4d0bf9d8a72d2c2c68f5",
-    "ptc": "9e355c947bf61c3d2fe9bf3214b386f83c0d99d37579ce22576d4b82cb6e1a2c"
+    "standard": "3006cc3780cddaa7fb0089e5854e6bbef4409cf1d425930fd835226b95660afd",
+    "ptc": "ce02148b1fd575cc93071744180468cd305bdcd50dbfdd3b9b0605c5281d283d"
   }
 }

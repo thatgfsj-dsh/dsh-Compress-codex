@@ -1,7 +1,8 @@
 # Codex 语义 → DSH 契约（C1–C5）对齐表
 
 > **输入**：`docs/codex-notes.md`（Codex 基线 commit `ce0323f2f2d3b25e82806cd555237da3db4e1897`）。
-> **DSH 侧依据**：`docs/PLAN.md` §1.2（C1–C5）、§1.4（原生 basic 基线）；本机实装 `@deepseek-ai/dsh@0.2.1-rc.2` 的
+> **DSH 侧依据**：`docs/PLAN.md` §1.2（C1–C5）、§1.4（原生 basic 基线）；下列类型文件逐行读过的是
+> `@deepseek-ai/dsh@0.2.1-rc.2`（证据采集版本；本机当前验证基线 `0.2.2-rc.1`）的
 > `dsh-compaction/lib/types/types.d.ts`、`tool-pairing.d.ts`、`checkpoint.d.ts`、`dsh-compaction-basic/lib/types/summarizer.d.ts`。
 > **图例**：`照搬` = 语义与 DSH 契约兼容，可直接采用；`改造` = 保留意图但必须改写形态；`不可照搬` = 直接采用会违反 C1–C5 或产出非法请求。
 
